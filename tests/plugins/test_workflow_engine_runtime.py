@@ -138,3 +138,26 @@ def test_store_rejects_node_not_in_workflow(tmp_path):
     store.set_run_status("run-unknown-node", "running")
     with pytest.raises(WorkflowStateError, match="not part of the stored workflow"):
         store.start_node("run-unknown-node", "ghost", "ghost-key")
+
+
+def test_in_memory_store_supports_pause_and_resume():
+    runtime = WorkflowRuntime(WorkflowStore(":memory:"), {"transform": lambda config, inputs, key: {"ok": True}})
+    first = runtime.run(graph(), "run-memory")
+    assert first["status"] == "paused"
+    second = runtime.run(graph(), "run-memory", approvals={"review": True})
+    assert second["status"] == "succeeded"
+
+
+def test_non_json_handler_output_fails_closed(tmp_path):
+    runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"), {
+        "transform": lambda config, inputs, key: {"not_finite": float("nan")}
+    })
+    result = runtime.run(graph(), "run-non-json")
+    assert result["status"] == "failed"
+    assert result["nodes"]["one"]["status"] == "failed"
+
+
+def test_blank_run_id_is_rejected(tmp_path):
+    runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"), {"transform": lambda config, inputs, key: {}})
+    with pytest.raises(WorkflowStateError, match="run_id must be a non-empty string"):
+        runtime.run(graph(), "  ")
