@@ -59,7 +59,9 @@ class WorkflowStore:
             """)
 
     def create_run(self, run_id: str, graph: dict[str, Any]) -> dict[str, Any]:
-        graph_json = json.dumps(graph, sort_keys=True, separators=(",", ":"))
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise WorkflowStateError("run_id must be a non-empty string")
+        graph_json = json.dumps(graph, sort_keys=True, separators=(",", ":"), allow_nan=False)
         with self._connection() as db:
             db.execute("INSERT OR IGNORE INTO workflow_runs(run_id,workflow_id,graph_json,status) VALUES(?,?,?,'pending')",
                        (run_id, graph["id"], graph_json))
