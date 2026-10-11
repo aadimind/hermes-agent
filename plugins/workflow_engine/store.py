@@ -130,6 +130,8 @@ class WorkflowStore:
             db.commit()
 
     def start_node(self, run_id: str, node_id: str, idempotency_key: str) -> dict[str, Any] | None:
+        if not isinstance(idempotency_key, str) or not idempotency_key:
+            raise WorkflowStateError("idempotency_key must be a non-empty string")
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             run = db.execute("SELECT status,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
@@ -150,6 +152,9 @@ class WorkflowStore:
             if row and row["status"] in {"running", "failed", "waiting_approval"}:
                 db.rollback()
                 raise WorkflowStateError(f"node {node_id} is {row['status']}; explicit recovery is required")
+            if row and row["status"] != "pending":
+                db.rollback()
+                raise WorkflowStateError(f"node {node_id} has invalid stored status: {row['status']}")
             db.execute("INSERT INTO workflow_nodes(run_id,node_id,status,idempotency_key) VALUES(?,?, 'running',?) "
                        "ON CONFLICT(run_id,node_id) DO UPDATE SET status='running',idempotency_key=excluded.idempotency_key,error=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
                        (run_id,node_id,idempotency_key))
@@ -158,6 +163,8 @@ class WorkflowStore:
 
     def set_node_status(self, run_id: str, node_id: str, status: str, idempotency_key: str,
                         output: Any = None, error: str | None = None) -> None:
+        if not isinstance(idempotency_key, str) or not idempotency_key:
+            raise WorkflowStateError("idempotency_key must be a non-empty string")
         allowed_statuses = {"pending", "running", "waiting_approval", "succeeded", "failed"}
         if status not in allowed_statuses:
             raise WorkflowStateError(f"invalid node status: {status}")
