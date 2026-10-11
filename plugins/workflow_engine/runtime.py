@@ -17,6 +17,10 @@ class WorkflowRuntime:
         self.store = store
         self.handlers = dict(handlers or {})
 
+    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool = False) -> None:
+        """Authorize replay of a failed/interrupted node after operator review."""
+        self.store.recover_node(run_id, node_id, acknowledge_possible_side_effects=acknowledge_possible_side_effects)
+
     def run(self, document: dict[str, Any], run_id: str, *, approvals: dict[str, bool] | None = None) -> dict[str, Any]:
         graph = validate_workflow(document)
         run = self.store.create_run(run_id, graph)
@@ -67,7 +71,7 @@ class WorkflowRuntime:
             try:
                 output = handler(dict(node.get("config") or {}), inputs, idempotency_key)
                 # Fail before recording success if a handler returns non-JSON data.
-                json.dumps(output, sort_keys=True)
+                json.dumps(output, sort_keys=True, allow_nan=False)
                 self.store.complete_node(run_id,node_id,output)
             except Exception as exc:
                 try:
