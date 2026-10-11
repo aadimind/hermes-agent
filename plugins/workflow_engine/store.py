@@ -85,6 +85,12 @@ class WorkflowStore:
         item["output"] = json.loads(item.pop("output_json")) if item.get("output_json") is not None else None
         return item
 
+    @staticmethod
+    def _assert_node_in_graph(graph_json: str, node_id: str) -> None:
+        graph = json.loads(graph_json)
+        if not any(node.get("id") == node_id for node in graph.get("nodes", [])):
+            raise WorkflowStateError(f"node {node_id} is not part of the stored workflow")
+
     def get_node(self, run_id: str, node_id: str) -> dict[str, Any] | None:
         with self._connection() as db:
             row = db.execute("SELECT * FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id,node_id)).fetchone()
@@ -121,13 +127,14 @@ class WorkflowStore:
     def start_node(self, run_id: str, node_id: str, idempotency_key: str) -> dict[str, Any] | None:
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            run = db.execute("SELECT status FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            run = db.execute("SELECT status,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
             if run is None:
                 db.rollback()
                 raise WorkflowStateError(f"unknown run: {run_id}")
             if run["status"] != "running":
                 db.rollback()
                 raise WorkflowStateError(f"cannot start a node while run is {run['status']}")
+            self._assert_node_in_graph(run["graph_json"], node_id)
             row = db.execute("SELECT * FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id,node_id)).fetchone()
             if row and row["idempotency_key"] != idempotency_key:
                 db.rollback()
@@ -159,6 +166,14 @@ class WorkflowStore:
         output_json = json.dumps(output, sort_keys=True, separators=(",", ":"), allow_nan=False) if output is not None else None
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            run = db.execute("SELECT status,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            if run is None:
+                db.rollback()
+                raise WorkflowStateError(f"unknown run: {run_id}")
+            if run["status"] != "running":
+                db.rollback()
+                raise WorkflowStateError(f"cannot update a node while run is {run['status']}")
+            self._assert_node_in_graph(run["graph_json"], node_id)
             row = db.execute("SELECT status,idempotency_key FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id,node_id)).fetchone()
             if row is not None:
                 if row["idempotency_key"] != idempotency_key:
@@ -195,11 +210,12 @@ class WorkflowStore:
             raise WorkflowStateError("recovery requires acknowledgement of possible external side effects")
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            run = db.execute("SELECT status FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            run = db.execute("SELECT status,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
             node = db.execute("SELECT status FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id, node_id)).fetchone()
             if run is None or node is None:
                 db.rollback()
                 raise WorkflowStateError("unknown run or node")
+            self._assert_node_in_graph(run["graph_json"], node_id)
             if run["status"] not in {"failed", "running", "paused"}:
                 db.rollback()
                 raise WorkflowStateError(f"run status {run['status']} cannot be recovered")
