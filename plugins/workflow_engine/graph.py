@@ -55,7 +55,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
             raise WorkflowValidationError(f"nodes[{index}].id must be a non-empty string")
         if node_id in node_ids:
             raise WorkflowValidationError(f"duplicate node id: {node_id}")
-        if node_type not in _ALLOWED_NODE_TYPES:
+        if not isinstance(node_type, str) or node_type not in _ALLOWED_NODE_TYPES:
             raise WorkflowValidationError(f"node {node_id}: unsupported type {node_type!r}")
         config = node.get("config", {})
         if not isinstance(config, dict):
@@ -77,7 +77,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
         if unknown:
             raise WorkflowValidationError(f"edges[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
         source, target = edge.get("source"), edge.get("target")
-        if source not in node_ids or target not in node_ids:
+        if not isinstance(source, str) or not isinstance(target, str) or source not in node_ids or target not in node_ids:
             raise WorkflowValidationError(f"edges[{index}] references an unknown node")
         if source == target:
             raise WorkflowValidationError(f"self-loop is not allowed: {source}")
@@ -114,7 +114,7 @@ def topological_order(document: dict[str, Any]) -> list[str]:
         if not isinstance(edge, dict):
             raise WorkflowValidationError(f"edges[{index}] must be an object")
         source, target = edge.get("source"), edge.get("target")
-        if source not in indegree or target not in indegree:
+        if not isinstance(source, str) or not isinstance(target, str) or source not in indegree or target not in indegree:
             raise WorkflowValidationError(f"edges[{index}] references an unknown node")
         adjacency[source].append(target)
         indegree[target] += 1
