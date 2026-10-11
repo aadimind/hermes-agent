@@ -77,6 +77,17 @@ class WorkflowRuntime:
                 continue
             handler = self.handlers.get(node["type"])
             if handler is None:
+                # Persist a visible pending checkpoint when execution is blocked
+                # by an unregistered handler. Never hide an interrupted/failed
+                # node behind a generic paused run; that requires explicit recovery.
+                if existing is not None and existing["status"] in {"running", "failed"}:
+                    raise WorkflowStateError(
+                        f"node {node_id} is {existing['status']}; explicit recovery is required"
+                    )
+                if existing is None:
+                    self.store.set_node_status(
+                        run_id, node_id, "pending", idempotency_key
+                    )
                 self.store.set_run_status(run_id,"paused",f"no handler registered for node type: {node['type']}")
                 return self._get_run_or_raise(run_id)
             cached = self.store.start_node(run_id,node_id,idempotency_key)
