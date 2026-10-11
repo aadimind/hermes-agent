@@ -27,7 +27,7 @@ def test_independent_nodes_keep_declaration_order():
 
 
 @pytest.mark.parametrize("document, message", [
-    ([], "workflow must be an object"), ({}, "unknown workflow fields"),
+    ([], "workflow must be an object"), ({"unexpected": True}, "unknown workflow fields"),
     (graph(nodes=[{"id": "x", "type": "shell"}], edges=[]), "unsupported type"),
     (graph(nodes=[{"id": "x", "type": "end"}, {"id": "x", "type": "end"}], edges=[]), "duplicate node id"),
     (graph(edges=[{"source": "missing", "target": "finish"}]), "unknown node"),
