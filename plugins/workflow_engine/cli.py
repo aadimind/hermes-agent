@@ -18,7 +18,7 @@ def register_cli(parser: argparse.ArgumentParser) -> None:
 
 def workflow_engine_command(args: argparse.Namespace) -> int:
     try:
-        document = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        document = json.loads(Path(args.path).read_text(encoding="utf-8-sig"))
         graph = validate_workflow(document)
         if args.workflow_engine_action == "validate":
             print(json.dumps({"ok": True, "workflow_id": graph["id"], "nodes": len(graph["nodes"]), "edges": len(graph["edges"])}, indent=2))
