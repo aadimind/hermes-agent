@@ -134,12 +134,19 @@ def topological_order(document: dict[str, Any]) -> list[str]:
             raise WorkflowValidationError(f"duplicate node id: {node_id}")
         order_index[node_id] = index
         indegree[node_id] = 0
+    seen_edges: set[tuple[str, str]] = set()
     for index, edge in enumerate(edges):
         if not isinstance(edge, dict):
             raise WorkflowValidationError(f"edges[{index}] must be an object")
         source, target = edge.get("source"), edge.get("target")
         if not isinstance(source, str) or not isinstance(target, str) or source not in indegree or target not in indegree:
             raise WorkflowValidationError(f"edges[{index}] references an unknown node")
+        if source == target:
+            raise WorkflowValidationError(f"self-loop is not allowed: {source}")
+        pair = (source, target)
+        if pair in seen_edges:
+            raise WorkflowValidationError(f"duplicate edge: {source} -> {target}")
+        seen_edges.add(pair)
         adjacency[source].append(target)
         indegree[target] += 1
 
