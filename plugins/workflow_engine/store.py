@@ -200,7 +200,7 @@ class WorkflowStore:
             raise WorkflowStateError(f"node {node_id} is not running")
         self.set_node_status(run_id,node_id,"succeeded",row["idempotency_key"],output=output)
 
-    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool) -> None:
+    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool, acknowledge_run_stopped: bool) -> None:
         """Reset an interrupted/failed node only after explicit operator review.
 
         A handler may have performed an external side effect before stopping. Keep
@@ -208,6 +208,8 @@ class WorkflowStore:
         """
         if acknowledge_possible_side_effects is not True:
             raise WorkflowStateError("recovery requires acknowledgement of possible external side effects")
+        if acknowledge_run_stopped is not True:
+            raise WorkflowStateError("recovery requires acknowledgement that the original runner has stopped")
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             run = db.execute("SELECT status,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
@@ -216,7 +218,7 @@ class WorkflowStore:
                 db.rollback()
                 raise WorkflowStateError("unknown run or node")
             self._assert_node_in_graph(run["graph_json"], node_id)
-            if run["status"] not in {"failed", "running", "paused"}:
+            if run["status"] not in {"failed", "paused", "running"}:
                 db.rollback()
                 raise WorkflowStateError(f"run status {run['status']} cannot be recovered")
             if node["status"] not in {"running", "failed"}:
