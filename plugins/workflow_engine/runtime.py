@@ -65,11 +65,11 @@ class WorkflowRuntime:
                 if node_id not in approvals:
                     self.store.set_node_status(run_id,node_id,"waiting_approval",idempotency_key)
                     self.store.set_run_status(run_id,"paused",f"approval required: {node_id}")
-                    return self.store.get_run(run_id)
+                    return self._get_run_or_raise(run_id)
                 if approvals[node_id] is not True:
                     self.store.set_node_status(run_id,node_id,"failed",idempotency_key,error="approval rejected")
                     self.store.set_run_status(run_id,"failed",f"approval rejected: {node_id}")
-                    return self.store.get_run(run_id)
+                    return self._get_run_or_raise(run_id)
                 self.store.set_node_status(run_id,node_id,"succeeded",idempotency_key,output={"approved": True})
                 continue
             if node["type"] == "end":
@@ -78,7 +78,7 @@ class WorkflowRuntime:
             handler = self.handlers.get(node["type"])
             if handler is None:
                 self.store.set_run_status(run_id,"paused",f"no handler registered for node type: {node['type']}")
-                return self.store.get_run(run_id)
+                return self._get_run_or_raise(run_id)
             cached = self.store.start_node(run_id,node_id,idempotency_key)
             if cached is not None:
                 continue
@@ -92,6 +92,6 @@ class WorkflowRuntime:
                     self.store.fail_node(run_id,node_id,f"{type(exc).__name__}: {exc}")
                 finally:
                     self.store.set_run_status(run_id,"failed",f"node {node_id} failed")
-                return self.store.get_run(run_id)
+                return self._get_run_or_raise(run_id)
         self.store.set_run_status(run_id,"succeeded")
-        return self.store.get_run(run_id)
+        return self._get_run_or_raise(run_id)
