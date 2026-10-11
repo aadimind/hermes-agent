@@ -39,4 +39,4 @@ Run the targeted tests with:
 pytest tests/plugins/test_workflow_engine_graph.py
 ```
 
-The full deterministic runner, durable execution store, event triggers, cancellation, visual editor, and end-to-end Hermes integration are not yet implemented.
+A handler-driven runtime, SQLite checkpoint store, approval pause/resume, and targeted tests are included. Event/webhook/cron triggers, cancellation controls, a visual editor, built-in Hermes agent-session adapters, and full Desktop end-to-end integration are not yet implemented.
