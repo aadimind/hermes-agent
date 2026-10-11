@@ -87,7 +87,7 @@ class WorkflowRuntime:
                 # Fail before recording success if a handler returns non-JSON data.
                 json.dumps(output, sort_keys=True, allow_nan=False)
                 self.store.complete_node(run_id,node_id,output)
-            except Exception as exc:
+            except Exception as exc:  # health: allow BLE001 -- persist failures from caller-supplied handlers.
                 try:
                     self.store.fail_node(run_id,node_id,f"{type(exc).__name__}: {exc}")
                 finally:
