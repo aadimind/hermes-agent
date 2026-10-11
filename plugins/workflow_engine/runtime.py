@@ -17,9 +17,9 @@ class WorkflowRuntime:
         self.store = store
         self.handlers = dict(handlers or {})
 
-    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool = False) -> None:
+    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool = False, acknowledge_run_stopped: bool = False) -> None:
         """Authorize replay of a failed/interrupted node after operator review."""
-        self.store.recover_node(run_id, node_id, acknowledge_possible_side_effects=acknowledge_possible_side_effects)
+        self.store.recover_node(run_id, node_id, acknowledge_possible_side_effects=acknowledge_possible_side_effects, acknowledge_run_stopped=acknowledge_run_stopped)
 
     def run(self, document: dict[str, Any], run_id: str, *, approvals: dict[str, bool] | None = None) -> dict[str, Any]:
         if not isinstance(run_id, str) or not run_id.strip():
