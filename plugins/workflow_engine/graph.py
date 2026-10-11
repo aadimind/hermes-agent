@@ -9,7 +9,7 @@ SCHEMA_VERSION = 1
 _ALLOWED_NODE_TYPES = frozenset({"agent", "approval", "transform", "end"})
 _ALLOWED_NODE_KEYS = frozenset({"id", "type", "name", "config"})
 _ALLOWED_EDGE_KEYS = frozenset({"source", "target"})
-_ALLOWED_ROOT_KEYS = frozenset({"schema_version", "id", "name", "nodes", "edges"})
+_ALLOWED_ROOT_KEYS = frozenset({"schema_version", "id", "name", "nodes", "edges"})\n_FORBIDDEN_CONFIG_KEYS = frozenset({"argv", "shell", "command", "exec", "executable", "module", "import", "url"})\n\n\ndef _validate_config(value: Any, path: str) -> None:\n    if isinstance(value, dict):\n        for key, child in value.items():\n            if not isinstance(key, str):\n                raise WorkflowValidationError(f"{path} keys must be strings")\n            if key.lower() in _FORBIDDEN_CONFIG_KEYS:\n                raise WorkflowValidationError(f"{path} contains unsupported key: {key}")\n            _validate_config(child, f"{path}.{key}")\n    elif isinstance(value, list):\n        for index, child in enumerate(value):\n            _validate_config(child, f"{path}[{index}]")\n    elif value is not None and not isinstance(value, (str, int, float, bool)):\n        raise WorkflowValidationError(f"{path} contains a non-JSON value")
 
 
 class WorkflowValidationError(ValueError):
