@@ -4,6 +4,7 @@ This package deliberately has no core imports, network client, shell executor, o
 Integrations supply explicit handlers to the runtime.
 """
 
-from plugins.workflow_engine.graph import WorkflowValidationError, validate_workflow, topological_order\nfrom plugins.workflow_engine.cli import register
+from plugins.workflow_engine.graph import WorkflowValidationError, validate_workflow, topological_order
+from plugins.workflow_engine.cli import register
 
 __all__ = ["WorkflowValidationError", "validate_workflow", "topological_order", "register"]
