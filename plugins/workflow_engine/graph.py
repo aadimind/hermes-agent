@@ -36,6 +36,57 @@ class WorkflowValidationError(ValueError):
     """Raised when a workflow document is malformed or unsafe to execute."""
 
 
+def _validate_nodes(nodes: list[Any]) -> tuple[list[dict[str, Any]], set[str]]:
+    normalized_nodes: list[dict[str, Any]] = []
+    node_ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            raise WorkflowValidationError(f"nodes[{index}] must be an object")
+        unknown = set(node) - _ALLOWED_NODE_KEYS
+        if unknown:
+            raise WorkflowValidationError(f"nodes[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
+        node_id, node_type = node.get("id"), node.get("type")
+        if not isinstance(node_id, str) or not node_id.strip():
+            raise WorkflowValidationError(f"nodes[{index}].id must be a non-empty string")
+        node_id = node_id.strip()
+        if node_id in node_ids:
+            raise WorkflowValidationError(f"duplicate node id: {node_id}")
+        if not isinstance(node_type, str) or node_type not in _ALLOWED_NODE_TYPES:
+            raise WorkflowValidationError(f"node {node_id}: unsupported type {node_type!r}")
+        config = node.get("config", {})
+        if not isinstance(config, dict):
+            raise WorkflowValidationError(f"node {node_id}.config must be an object")
+        _validate_config(config, f"node {node_id}.config")
+        normalized = {"id": node_id, "type": node_type, "config": copy.deepcopy(config)}
+        if "name" in node:
+            if not isinstance(node["name"], str):
+                raise WorkflowValidationError(f"node {node_id}.name must be a string")
+            normalized["name"] = node["name"]
+        node_ids.add(node_id)
+        normalized_nodes.append(normalized)
+    return normalized_nodes, node_ids
+
+def _validate_edges(edges: list[Any], node_ids: set[str]) -> list[dict[str, str]]:
+    normalized_edges: list[dict[str, str]] = []
+    seen_edges: set[tuple[str, str]] = set()
+    for index, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            raise WorkflowValidationError(f"edges[{index}] must be an object")
+        unknown = set(edge) - _ALLOWED_EDGE_KEYS
+        if unknown:
+            raise WorkflowValidationError(f"edges[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
+        source, target = edge.get("source"), edge.get("target")
+        if not isinstance(source, str) or not isinstance(target, str) or source not in node_ids or target not in node_ids:
+            raise WorkflowValidationError(f"edges[{index}] references an unknown node")
+        if source == target:
+            raise WorkflowValidationError(f"self-loop is not allowed: {source}")
+        pair = (source, target)
+        if pair in seen_edges:
+            raise WorkflowValidationError(f"duplicate edge: {source} -> {target}")
+        seen_edges.add(pair)
+        normalized_edges.append({"source": source, "target": target})
+    return normalized_edges
+
 def validate_workflow(document: Any) -> dict[str, Any]:
     """Validate and return a normalized copy of a workflow document.
 
@@ -64,53 +115,8 @@ def validate_workflow(document: Any) -> dict[str, Any]:
     if not isinstance(edges, list):
         raise WorkflowValidationError("edges must be a list")
 
-    normalized_nodes: list[dict[str, Any]] = []
-    node_ids: set[str] = set()
-    for index, node in enumerate(nodes):
-        if not isinstance(node, dict):
-            raise WorkflowValidationError(f"nodes[{index}] must be an object")
-        unknown = set(node) - _ALLOWED_NODE_KEYS
-        if unknown:
-            raise WorkflowValidationError(f"nodes[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
-        node_id, node_type = node.get("id"), node.get("type")
-        if not isinstance(node_id, str) or not node_id.strip():
-            raise WorkflowValidationError(f"nodes[{index}].id must be a non-empty string")
-        node_id = node_id.strip()
-        if node_id in node_ids:
-            raise WorkflowValidationError(f"duplicate node id: {node_id}")
-        if not isinstance(node_type, str) or node_type not in _ALLOWED_NODE_TYPES:
-            raise WorkflowValidationError(f"node {node_id}: unsupported type {node_type!r}")
-        config = node.get("config", {})
-        if not isinstance(config, dict):
-            raise WorkflowValidationError(f"node {node_id}.config must be an object")
-        _validate_config(config, f"node {node_id}.config")
-        normalized = {"id": node_id, "type": node_type, "config": copy.deepcopy(config)}
-        if "name" in node:
-            if not isinstance(node["name"], str):
-                raise WorkflowValidationError(f"node {node_id}.name must be a string")
-            normalized["name"] = node["name"]
-        node_ids.add(node_id)
-        normalized_nodes.append(normalized)
-
-    normalized_edges: list[dict[str, str]] = []
-    seen_edges: set[tuple[str, str]] = set()
-    for index, edge in enumerate(edges):
-        if not isinstance(edge, dict):
-            raise WorkflowValidationError(f"edges[{index}] must be an object")
-        unknown = set(edge) - _ALLOWED_EDGE_KEYS
-        if unknown:
-            raise WorkflowValidationError(f"edges[{index}] has unsupported fields: {', '.join(sorted(unknown))}")
-        source, target = edge.get("source"), edge.get("target")
-        if not isinstance(source, str) or not isinstance(target, str) or source not in node_ids or target not in node_ids:
-            raise WorkflowValidationError(f"edges[{index}] references an unknown node")
-        if source == target:
-            raise WorkflowValidationError(f"self-loop is not allowed: {source}")
-        pair = (source, target)
-        if pair in seen_edges:
-            raise WorkflowValidationError(f"duplicate edge: {source} -> {target}")
-        seen_edges.add(pair)
-        normalized_edges.append({"source": source, "target": target})
-
+    normalized_nodes, node_ids = _validate_nodes(nodes)
+    normalized_edges = _validate_edges(edges, node_ids)
     normalized = {"schema_version": SCHEMA_VERSION, "id": workflow_id.strip(), "name": name.strip(),
                   "nodes": normalized_nodes, "edges": normalized_edges}
     topological_order(normalized)
