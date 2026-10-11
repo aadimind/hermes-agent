@@ -46,7 +46,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
     unknown_root = set(document) - _ALLOWED_ROOT_KEYS
     if unknown_root:
         raise WorkflowValidationError(f"unknown workflow fields: {', '.join(sorted(unknown_root))}")
-    if document.get("schema_version") != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document.get("schema_version") != SCHEMA_VERSION:
         raise WorkflowValidationError(f"schema_version must be {SCHEMA_VERSION}")
     workflow_id = document.get("id")
     name = document.get("name")
