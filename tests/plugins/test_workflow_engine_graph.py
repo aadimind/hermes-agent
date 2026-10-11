@@ -50,6 +50,13 @@ def test_duplicate_edges_are_rejected():
         validate_workflow(document)
 
 
+def test_boolean_schema_version_is_not_integer_version_one():
+    document = graph()
+    document["schema_version"] = True
+    with pytest.raises(WorkflowValidationError, match="schema_version"):
+        validate_workflow(document)
+
+
 def test_schema_version_must_be_supported():
     document = graph()
     document["schema_version"] = 2
