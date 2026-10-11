@@ -68,3 +68,23 @@ def test_non_finite_config_numbers_are_rejected():
     document = graph(nodes=[{"id": "x", "type": "transform", "config": {"value": math.nan}}], edges=[])
     with pytest.raises(WorkflowValidationError, match="non-finite number"):
         validate_workflow(document)
+
+
+def test_direct_topological_order_rejects_duplicate_edges():
+    document = graph(edges=[{"source": "start", "target": "review"}, {"source": "start", "target": "review"}])
+    with pytest.raises(WorkflowValidationError, match="duplicate edge"):
+        topological_order(document)
+
+
+def test_non_string_root_keys_are_rejected_cleanly():
+    document = graph()
+    document[1] = "unexpected"
+    with pytest.raises(WorkflowValidationError, match="field names must be strings"):
+        validate_workflow(document)
+
+
+def test_normalized_config_does_not_share_nested_mutable_values():
+    original = graph(nodes=[{"id": "x", "type": "transform", "config": {"nested": {"value": 1}}}], edges=[])
+    normalized = validate_workflow(original)
+    original["nodes"][0]["config"]["nested"]["value"] = 2
+    assert normalized["nodes"][0]["config"]["nested"]["value"] == 1
