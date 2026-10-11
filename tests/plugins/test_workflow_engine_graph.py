@@ -33,7 +33,10 @@ def test_independent_nodes_keep_declaration_order():
     (graph(edges=[{"source": "missing", "target": "finish"}]), "unknown node"),
     (graph(edges=[{"source": "start", "target": "start"}]), "self-loop"),
     (graph(edges=[{"source": "start", "target": "review"}, {"source": "review", "target": "start"}]), "cycle"),
-    (graph(nodes=[{"id": "x", "type": "end", "argv": ["sh", "-c", "unsafe"]}], edges=[]), "unsupported fields"),\n    (graph(nodes=[{"id": "x", "type": "transform", "config": {"nested": {"command": "unsafe"}}}], edges=[]), "unsupported key"),\n    (graph(nodes=[{"id": "x", "type": ["end"]}], edges=[]), "unsupported type"),\n    (graph(edges=[{"source": [], "target": "finish"}]), "unknown node"),
+    (graph(nodes=[{"id": "x", "type": "end", "argv": ["sh", "-c", "unsafe"]}], edges=[]), "unsupported fields"),
+    (graph(nodes=[{"id": "x", "type": "transform", "config": {"nested": {"command": "unsafe"}}}], edges=[]), "unsupported key"),
+    (graph(nodes=[{"id": "x", "type": ["end"]}], edges=[]), "unsupported type"),
+    (graph(edges=[{"source": [], "target": "finish"}]), "unknown node"),
 ])
 def test_invalid_graphs_fail_closed(document, message):
     with pytest.raises(WorkflowValidationError, match=message):
