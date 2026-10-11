@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import math
 from typing import Any
 
 SCHEMA_VERSION = 1
@@ -24,6 +25,8 @@ def _validate_config(value: Any, path: str) -> None:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _validate_config(child, f"{path}[{index}]")
+    elif isinstance(value, float) and not math.isfinite(value):
+        raise WorkflowValidationError(f"{path} contains a non-finite number")
     elif value is not None and not isinstance(value, (str, int, float, bool)):
         raise WorkflowValidationError(f"{path} contains a non-JSON value")
 
