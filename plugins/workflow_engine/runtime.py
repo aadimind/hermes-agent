@@ -81,9 +81,9 @@ class WorkflowRuntime:
                 # by an unregistered handler. Never hide an interrupted/failed
                 # node behind a generic paused run; that requires explicit recovery.
                 if existing is not None and existing["status"] in {"running", "failed"}:
-                    raise WorkflowStateError(
-                        f"node {node_id} is {existing['status']}; explicit recovery is required"
-                    )
+                    message = f"node {node_id} is {existing['status']}; explicit recovery is required"
+                    self.store.set_run_status(run_id, "failed", message)
+                    raise WorkflowStateError(message)
                 if existing is None:
                     self.store.set_node_status(
                         run_id, node_id, "pending", idempotency_key
