@@ -91,16 +91,47 @@ class WorkflowStore:
         return self._decode_node(row) if row else None
 
     def set_run_status(self, run_id: str, status: str, error: str | None = None) -> None:
+        allowed_statuses = {"pending", "running", "paused", "succeeded", "failed", "cancelled"}
+        if status not in allowed_statuses:
+            raise WorkflowStateError(f"invalid run status: {status}")
+        transitions = {
+            "pending": {"pending", "running", "paused", "failed"},
+            "running": {"running", "paused", "succeeded", "failed"},
+            "paused": {"paused", "running", "failed"},
+            "failed": {"failed"},
+            "succeeded": {"succeeded"},
+            "cancelled": {"cancelled"},
+        }
         with self._connection() as db:
-            cur = db.execute("UPDATE workflow_runs SET status=?,error=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=?",
-                             (status,error,run_id))
-            if cur.rowcount != 1:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            if row is None:
+                db.rollback()
                 raise WorkflowStateError(f"unknown run: {run_id}")
+            current = row["status"]
+            if status not in transitions.get(current, set()):
+                db.rollback()
+                raise WorkflowStateError(f"invalid run transition: {current} -> {status}")
+            db.execute(
+                "UPDATE workflow_runs SET status=?,error=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=?",
+                (status, error, run_id),
+            )
+            db.commit()
 
     def start_node(self, run_id: str, node_id: str, idempotency_key: str) -> dict[str, Any] | None:
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
+            run = db.execute("SELECT status FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            if run is None:
+                db.rollback()
+                raise WorkflowStateError(f"unknown run: {run_id}")
+            if run["status"] != "running":
+                db.rollback()
+                raise WorkflowStateError(f"cannot start a node while run is {run['status']}")
             row = db.execute("SELECT * FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id,node_id)).fetchone()
+            if row and row["idempotency_key"] != idempotency_key:
+                db.rollback()
+                raise WorkflowStateError(f"node {node_id} idempotency key changed")
             if row and row["status"] == "succeeded":
                 db.commit()
                 return self._decode_node(row)
@@ -115,11 +146,37 @@ class WorkflowStore:
 
     def set_node_status(self, run_id: str, node_id: str, status: str, idempotency_key: str,
                         output: Any = None, error: str | None = None) -> None:
+        allowed_statuses = {"pending", "running", "waiting_approval", "succeeded", "failed"}
+        if status not in allowed_statuses:
+            raise WorkflowStateError(f"invalid node status: {status}")
+        transitions = {
+            "pending": {"running", "waiting_approval", "succeeded", "failed"},
+            "running": {"succeeded", "failed"},
+            "waiting_approval": {"waiting_approval", "succeeded", "failed"},
+            "failed": set(),
+            "succeeded": {"succeeded"},
+        }
         output_json = json.dumps(output, sort_keys=True, separators=(",", ":"), allow_nan=False) if output is not None else None
         with self._connection() as db:
-            db.execute("INSERT INTO workflow_nodes(run_id,node_id,status,idempotency_key,output_json,error) VALUES(?,?,?,?,?,?) "
-                       "ON CONFLICT(run_id,node_id) DO UPDATE SET status=excluded.status,idempotency_key=excluded.idempotency_key,output_json=excluded.output_json,error=excluded.error,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-                       (run_id,node_id,status,idempotency_key,output_json,error))
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status,idempotency_key FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id,node_id)).fetchone()
+            if row is not None:
+                if row["idempotency_key"] != idempotency_key:
+                    db.rollback()
+                    raise WorkflowStateError(f"node {node_id} idempotency key changed")
+                if status not in transitions.get(row["status"], set()):
+                    db.rollback()
+                    raise WorkflowStateError(f"invalid node transition: {row['status']} -> {status}")
+                db.execute(
+                    "UPDATE workflow_nodes SET status=?,output_json=?,error=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=? AND node_id=?",
+                    (status, output_json, error, run_id, node_id),
+                )
+            else:
+                db.execute(
+                    "INSERT INTO workflow_nodes(run_id,node_id,status,idempotency_key,output_json,error) VALUES(?,?,?,?,?,?)",
+                    (run_id,node_id,status,idempotency_key,output_json,error),
+                )
+            db.commit()
 
     def complete_node(self, run_id: str, node_id: str, output: Any) -> None:
         with self._connection() as db:
