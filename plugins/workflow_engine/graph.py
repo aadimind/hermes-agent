@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import copy
 import math
 from typing import Any
 
@@ -43,6 +44,8 @@ def validate_workflow(document: Any) -> dict[str, Any]:
     """
     if not isinstance(document, dict):
         raise WorkflowValidationError("workflow must be an object")
+    if any(not isinstance(key, str) for key in document):
+        raise WorkflowValidationError("workflow field names must be strings")
     unknown_root = set(document) - _ALLOWED_ROOT_KEYS
     if unknown_root:
         raise WorkflowValidationError(f"unknown workflow fields: {', '.join(sorted(unknown_root))}")
@@ -81,7 +84,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
         if not isinstance(config, dict):
             raise WorkflowValidationError(f"node {node_id}.config must be an object")
         _validate_config(config, f"node {node_id}.config")
-        normalized = {"id": node_id, "type": node_type, "config": dict(config)}
+        normalized = {"id": node_id, "type": node_type, "config": copy.deepcopy(config)}
         if "name" in node:
             if not isinstance(node["name"], str):
                 raise WorkflowValidationError(f"node {node_id}.name must be a string")
