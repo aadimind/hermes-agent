@@ -1,6 +1,7 @@
 """Contract tests for the isolated workflow graph validator."""
 
 import pytest
+import math
 
 from plugins.workflow_engine.graph import WorkflowValidationError, topological_order, validate_workflow
 
@@ -53,4 +54,10 @@ def test_schema_version_must_be_supported():
     document = graph()
     document["schema_version"] = 2
     with pytest.raises(WorkflowValidationError, match="schema_version"):
+        validate_workflow(document)
+
+
+def test_non_finite_config_numbers_are_rejected():
+    document = graph(nodes=[{"id": "x", "type": "transform", "config": {"value": math.nan}}], edges=[])
+    with pytest.raises(WorkflowValidationError, match="non-finite number"):
         validate_workflow(document)
