@@ -1,6 +1,7 @@
 """Runtime contract tests: checkpointing, deterministic ordering and approvals."""
 import pytest
 
+from plugins.workflow_engine.graph import validate_workflow
 from plugins.workflow_engine.runtime import WorkflowRuntime
 from plugins.workflow_engine.store import WorkflowStateError, WorkflowStore
 
@@ -66,7 +67,7 @@ def test_recovery_requires_explicit_side_effect_acknowledgement(tmp_path):
 def test_interrupted_running_node_can_be_recovered_explicitly(tmp_path):
     store = WorkflowStore(tmp_path / "workflow.sqlite")
     runtime = WorkflowRuntime(store, {"transform": lambda config, inputs, key: {"ok": True}})
-    store.create_run("run-interrupted", __import__("plugins.workflow_engine.graph", fromlist=["validate_workflow"]).validate_workflow(graph()))
+    store.create_run("run-interrupted", validate_workflow(graph()))
     store.set_run_status("run-interrupted", "running")
     store.start_node("run-interrupted", "one", "stable-key")
     runtime.recover_node("run-interrupted", "one", acknowledge_possible_side_effects=True)
