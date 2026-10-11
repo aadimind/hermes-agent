@@ -74,3 +74,35 @@ def test_interrupted_running_node_can_be_recovered_explicitly(tmp_path):
     result = runtime.run(graph(), "run-interrupted")
     assert result["status"] == "paused"
     assert result["nodes"]["one"]["status"] == "succeeded"
+
+
+def test_missing_handler_pauses_and_can_resume_when_registered(tmp_path):
+    runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"))
+    first = runtime.run(graph(), "run-missing-handler")
+    assert first["status"] == "paused"
+    assert "no handler registered" in first["error"]
+    runtime.handlers["transform"] = lambda config, inputs, key: {"ready": True}
+    second = runtime.run(graph(), "run-missing-handler")
+    assert second["status"] == "paused"
+    assert second["nodes"]["one"]["output"] == {"ready": True}
+
+
+def test_store_rejects_illegal_run_and_node_transitions(tmp_path):
+    store = WorkflowStore(tmp_path / "workflow.sqlite")
+    store.create_run("run-transitions", validate_workflow(graph()))
+    with pytest.raises(WorkflowStateError, match="invalid run transition"):
+        store.set_run_status("run-transitions", "succeeded")
+    store.set_run_status("run-transitions", "running")
+    store.start_node("run-transitions", "one", "key-one")
+    with pytest.raises(WorkflowStateError, match="invalid node transition"):
+        store.set_node_status("run-transitions", "one", "waiting_approval", "key-one")
+    store.fail_node("run-transitions", "one", "failed")
+    with pytest.raises(WorkflowStateError, match="invalid node transition"):
+        store.set_node_status("run-transitions", "one", "succeeded", "key-one", output={"unsafe": False})
+
+
+def test_store_rejects_starting_node_when_run_is_not_running(tmp_path):
+    store = WorkflowStore(tmp_path / "workflow.sqlite")
+    store.create_run("run-not-running", validate_workflow(graph()))
+    with pytest.raises(WorkflowStateError, match="cannot start a node"):
+        store.start_node("run-not-running", "one", "key-one")
