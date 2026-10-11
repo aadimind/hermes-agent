@@ -22,7 +22,15 @@ class WorkflowRuntime:
         self.store.recover_node(run_id, node_id, acknowledge_possible_side_effects=acknowledge_possible_side_effects)
 
     def run(self, document: dict[str, Any], run_id: str, *, approvals: dict[str, bool] | None = None) -> dict[str, Any]:
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise WorkflowStateError("run_id must be a non-empty string")
         graph = validate_workflow(document)
+        approval_nodes = {node["id"] for node in graph["nodes"] if node["type"] == "approval"}
+        if approvals is not None:
+            if not isinstance(approvals, dict) or any(key not in approval_nodes for key in approvals):
+                raise WorkflowStateError("approvals must only reference approval nodes in this workflow")
+            if any(type(value) is not bool for value in approvals.values()):
+                raise WorkflowStateError("approval values must be booleans")
         run = self.store.create_run(run_id, graph)
         if run["status"] == "succeeded":
             return run
