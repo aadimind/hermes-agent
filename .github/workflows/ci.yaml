@@ -36,7 +36,7 @@ on:
         default: false
   pull_request:
   push:
-    branches: [main]
+    branches: ['**']
 
 permissions:
   contents: read
@@ -50,7 +50,8 @@ permissions:
 # cancelled: its group is github.run_id. PRs collapse per-PR; pushes use the
 # ref as before.
 concurrency:
-  group: ci-${{ inputs.release == true && github.run_id || (github.event_name == 'pull_request' && github.event.pull_request.number || github.ref) }}
+  # v2 invalidates the stale per-PR group held by an older queued run; keep the same per-PR collapse semantics.
+  group: ci-v2-${{ inputs.release == true && github.run_id || format('{0}-{1}', github.event.pull_request.head.repo.full_name || github.repository, github.event.pull_request.head.ref || github.ref_name) }}
   cancel-in-progress: ${{ inputs.release != true && github.event_name == 'pull_request' }}
 
 jobs:
