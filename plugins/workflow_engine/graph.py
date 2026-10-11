@@ -18,7 +18,7 @@ def _validate_config(value: Any, path: str) -> None:
         for key, child in value.items():
             if not isinstance(key, str):
                 raise WorkflowValidationError(f"{path} keys must be strings")
-            if key.lower() in _FORBIDDEN_CONFIG_KEYS:
+            if key.strip().lower() in _FORBIDDEN_CONFIG_KEYS:
                 raise WorkflowValidationError(f"{path} contains unsupported key: {key}")
             _validate_config(child, f"{path}.{key}")
     elif isinstance(value, list):
