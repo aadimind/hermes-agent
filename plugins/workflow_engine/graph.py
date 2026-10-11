@@ -69,6 +69,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
         node_id, node_type = node.get("id"), node.get("type")
         if not isinstance(node_id, str) or not node_id.strip():
             raise WorkflowValidationError(f"nodes[{index}].id must be a non-empty string")
+        node_id = node_id.strip()
         if node_id in node_ids:
             raise WorkflowValidationError(f"duplicate node id: {node_id}")
         if not isinstance(node_type, str) or node_type not in _ALLOWED_NODE_TYPES:
@@ -76,6 +77,7 @@ def validate_workflow(document: Any) -> dict[str, Any]:
         config = node.get("config", {})
         if not isinstance(config, dict):
             raise WorkflowValidationError(f"node {node_id}.config must be an object")
+        _validate_config(config, f"node {node_id}.config")
         normalized = {"id": node_id, "type": node_type, "config": dict(config)}
         if "name" in node:
             if not isinstance(node["name"], str):
