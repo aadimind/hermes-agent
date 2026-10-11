@@ -130,3 +130,11 @@ def test_approval_inputs_are_validated(approvals, tmp_path):
     })
     with pytest.raises(WorkflowStateError, match="approvals|approval values"):
         runtime.run(graph(), "run-invalid-approval-" + str(len(approvals)) + str(type(next(iter(approvals.values())))), approvals=approvals)
+
+
+def test_store_rejects_node_not_in_workflow(tmp_path):
+    store = WorkflowStore(tmp_path / "workflow.sqlite")
+    store.create_run("run-unknown-node", validate_workflow(graph()))
+    store.set_run_status("run-unknown-node", "running")
+    with pytest.raises(WorkflowStateError, match="not part of the stored workflow"):
+        store.start_node("run-unknown-node", "ghost", "ghost-key")
