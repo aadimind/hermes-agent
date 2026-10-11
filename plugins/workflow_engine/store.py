@@ -68,7 +68,10 @@ class WorkflowStore:
             row = db.execute("SELECT workflow_id,graph_json FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
             if row is None or row["workflow_id"] != graph["id"] or row["graph_json"] != graph_json:
                 raise WorkflowStateError("run_id already belongs to a different workflow document")
-            return self.get_run(run_id)
+            result = self.get_run(run_id)
+            if result is None:
+                raise WorkflowStateError(f"run disappeared after creation: {run_id}")
+            return result
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         with self._connection() as db:
