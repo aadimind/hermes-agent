@@ -45,3 +45,31 @@ def test_failed_node_is_not_silently_retried(tmp_path):
     assert first["status"] == "failed"
     with pytest.raises(WorkflowStateError, match="explicit recovery"):
         runtime.run(graph(), "run-3")
+
+
+def test_recovery_requires_explicit_side_effect_acknowledgement(tmp_path):
+    runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"), {
+        "transform": lambda config, inputs, key: (_ for _ in ()).throw(RuntimeError("interrupted side effect"))
+    })
+    first = runtime.run(graph(), "run-recovery")
+    assert first["status"] == "failed"
+    with pytest.raises(WorkflowStateError, match="acknowledgement"):
+        runtime.recover_node("run-recovery", "one")
+    runtime.handlers["transform"] = lambda config, inputs, key: {"recovered": True}
+    runtime.recover_node("run-recovery", "one", acknowledge_possible_side_effects=True)
+    second = runtime.run(graph(), "run-recovery")
+    assert second["status"] == "paused"
+    assert second["nodes"]["one"]["output"] == {"recovered": True}
+    assert second["nodes"]["review"]["status"] == "waiting_approval"
+
+
+def test_interrupted_running_node_can_be_recovered_explicitly(tmp_path):
+    store = WorkflowStore(tmp_path / "workflow.sqlite")
+    runtime = WorkflowRuntime(store, {"transform": lambda config, inputs, key: {"ok": True}})
+    store.create_run("run-interrupted", __import__("plugins.workflow_engine.graph", fromlist=["validate_workflow"]).validate_workflow(graph()))
+    store.set_run_status("run-interrupted", "running")
+    store.start_node("run-interrupted", "one", "stable-key")
+    runtime.recover_node("run-interrupted", "one", acknowledge_possible_side_effects=True)
+    result = runtime.run(graph(), "run-interrupted")
+    assert result["status"] == "paused"
+    assert result["nodes"]["one"]["status"] == "succeeded"
