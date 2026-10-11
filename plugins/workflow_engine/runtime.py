@@ -63,7 +63,7 @@ class WorkflowRuntime:
                 continue
             handler = self.handlers.get(node["type"])
             if handler is None:
-                self.store.set_run_status(run_id,"failed",f"no handler registered for node type: {node['type']}")
+                self.store.set_run_status(run_id,"paused",f"no handler registered for node type: {node['type']}")
                 return self.store.get_run(run_id)
             cached = self.store.start_node(run_id,node_id,idempotency_key)
             if cached is not None:
