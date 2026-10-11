@@ -17,6 +17,12 @@ class WorkflowRuntime:
         self.store = store
         self.handlers = dict(handlers or {})
 
+    def _get_run_or_raise(self, run_id: str) -> dict[str, Any]:
+        result = self.store.get_run(run_id)
+        if result is None:
+            raise WorkflowStateError(f"run disappeared during execution: {run_id}")
+        return result
+
     def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool = False, acknowledge_run_stopped: bool = False) -> None:
         """Authorize replay of a failed/interrupted node after operator review."""
         self.store.recover_node(run_id, node_id, acknowledge_possible_side_effects=acknowledge_possible_side_effects, acknowledge_run_stopped=acknowledge_run_stopped)
@@ -52,7 +58,7 @@ class WorkflowRuntime:
                 parent = self.store.get_node(run_id, parent_id)
                 if not parent or parent["status"] != "succeeded":
                     self.store.set_run_status(run_id, "paused", f"waiting for predecessor {parent_id}")
-                    return self.store.get_run(run_id)
+                    return self._get_run_or_raise(run_id)
                 inputs[parent_id] = parent["output"]
             idempotency_key = hashlib.sha256(f"{run_id}:{node_id}".encode()).hexdigest()
             if node["type"] == "approval":
