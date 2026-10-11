@@ -115,7 +115,7 @@ class WorkflowStore:
 
     def set_node_status(self, run_id: str, node_id: str, status: str, idempotency_key: str,
                         output: Any = None, error: str | None = None) -> None:
-        output_json = json.dumps(output, sort_keys=True, separators=(",", ":")) if output is not None else None
+        output_json = json.dumps(output, sort_keys=True, separators=(",", ":"), allow_nan=False) if output is not None else None
         with self._connection() as db:
             db.execute("INSERT INTO workflow_nodes(run_id,node_id,status,idempotency_key,output_json,error) VALUES(?,?,?,?,?,?) "
                        "ON CONFLICT(run_id,node_id) DO UPDATE SET status=excluded.status,idempotency_key=excluded.idempotency_key,output_json=excluded.output_json,error=excluded.error,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
@@ -127,6 +127,31 @@ class WorkflowStore:
         if row is None or row["status"] != "running":
             raise WorkflowStateError(f"node {node_id} is not running")
         self.set_node_status(run_id,node_id,"succeeded",row["idempotency_key"],output=output)
+
+    def recover_node(self, run_id: str, node_id: str, *, acknowledge_possible_side_effects: bool) -> None:
+        """Reset an interrupted/failed node only after explicit operator review.
+
+        A handler may have performed an external side effect before stopping. Keep
+        the original idempotency key so cooperating destinations can deduplicate replay.
+        """
+        if acknowledge_possible_side_effects is not True:
+            raise WorkflowStateError("recovery requires acknowledgement of possible external side effects")
+        with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            run = db.execute("SELECT status FROM workflow_runs WHERE run_id=?", (run_id,)).fetchone()
+            node = db.execute("SELECT status FROM workflow_nodes WHERE run_id=? AND node_id=?", (run_id, node_id)).fetchone()
+            if run is None or node is None:
+                db.rollback()
+                raise WorkflowStateError("unknown run or node")
+            if run["status"] not in {"failed", "running", "paused"}:
+                db.rollback()
+                raise WorkflowStateError(f"run status {run['status']} cannot be recovered")
+            if node["status"] not in {"running", "failed"}:
+                db.rollback()
+                raise WorkflowStateError(f"node status {node['status']} is not recoverable")
+            db.execute("UPDATE workflow_nodes SET status='pending',output_json=NULL,error=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=? AND node_id=?", (run_id, node_id))
+            db.execute("UPDATE workflow_runs SET status='paused',error=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE run_id=?", (run_id,))
+            db.commit()
 
     def fail_node(self, run_id: str, node_id: str, error: str) -> None:
         with self._connection() as db:
