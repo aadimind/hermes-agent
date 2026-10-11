@@ -66,6 +66,7 @@ def _validate_nodes(nodes: list[Any]) -> tuple[list[dict[str, Any]], set[str]]:
         normalized_nodes.append(normalized)
     return normalized_nodes, node_ids
 
+
 def _validate_edges(edges: list[Any], node_ids: set[str]) -> list[dict[str, str]]:
     normalized_edges: list[dict[str, str]] = []
     seen_edges: set[tuple[str, str]] = set()
@@ -86,6 +87,7 @@ def _validate_edges(edges: list[Any], node_ids: set[str]) -> list[dict[str, str]
         seen_edges.add(pair)
         normalized_edges.append({"source": source, "target": target})
     return normalized_edges
+
 
 def validate_workflow(document: Any) -> dict[str, Any]:
     """Validate and return a normalized copy of a workflow document.
