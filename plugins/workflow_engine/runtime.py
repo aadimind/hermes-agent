@@ -60,7 +60,7 @@ class WorkflowRuntime:
                     self.store.set_run_status(run_id, "paused", f"waiting for predecessor {parent_id}")
                     return self._get_run_or_raise(run_id)
                 inputs[parent_id] = parent["output"]
-            idempotency_key = hashlib.sha256(f"{run_id}:{node_id}".encode()).hexdigest()
+            idempotency_key = hashlib.sha256(json.dumps([run_id, node_id], separators=(",", ":")).encode()).hexdigest()
             if node["type"] == "approval":
                 if node_id not in approvals:
                     self.store.set_node_status(run_id,node_id,"waiting_approval",idempotency_key)
