@@ -1,5 +1,6 @@
 """Runtime contract tests: checkpointing, deterministic ordering and approvals."""
 import hashlib
+import json
 
 import pytest
 
@@ -71,7 +72,7 @@ def test_interrupted_running_node_can_be_recovered_explicitly(tmp_path):
     runtime = WorkflowRuntime(store, {"transform": lambda config, inputs, key: {"ok": True}})
     store.create_run("run-interrupted", validate_workflow(graph()))
     store.set_run_status("run-interrupted", "running")
-    store.start_node("run-interrupted", "one", hashlib.sha256(b"run-interrupted:one").hexdigest())
+    store.start_node("run-interrupted", "one", hashlib.sha256(json.dumps(["run-interrupted", "one"], separators=(",", ":")).encode()).hexdigest())
     runtime.recover_node("run-interrupted", "one", acknowledge_possible_side_effects=True, acknowledge_run_stopped=True)
     result = runtime.run(graph(), "run-interrupted")
     assert result["status"] == "paused"
