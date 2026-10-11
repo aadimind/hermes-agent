@@ -84,10 +84,27 @@ def test_missing_handler_pauses_and_can_resume_when_registered(tmp_path):
     first = runtime.run(graph(), "run-missing-handler")
     assert first["status"] == "paused"
     assert "no handler registered" in first["error"]
+    assert first["nodes"]["one"]["status"] == "pending"
     runtime.handlers["transform"] = lambda config, inputs, key: {"ready": True}
     second = runtime.run(graph(), "run-missing-handler")
     assert second["status"] == "paused"
     assert second["nodes"]["one"]["output"] == {"ready": True}
+
+
+def test_missing_handler_does_not_hide_interrupted_running_node(tmp_path):
+    store = WorkflowStore(tmp_path / "workflow.sqlite")
+    document = validate_workflow(graph())
+    store.create_run("run-running-without-handler", document)
+    store.set_run_status("run-running-without-handler", "running")
+    store.start_node("run-running-without-handler", "one", "stable-key")
+    store.set_run_status("run-running-without-handler", "paused")
+    runtime = WorkflowRuntime(store)
+
+    with pytest.raises(WorkflowStateError, match="explicit recovery"):
+        runtime.run(graph(), "run-running-without-handler")
+
+    assert store.get_run("run-running-without-handler")["status"] == "failed"
+    assert store.get_node("run-running-without-handler", "one")["status"] == "running"
 
 
 def test_store_rejects_illegal_run_and_node_transitions(tmp_path):
