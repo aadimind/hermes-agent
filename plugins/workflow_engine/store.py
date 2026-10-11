@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -14,14 +15,17 @@ class WorkflowStateError(RuntimeError):
 
 class WorkflowStore:
     def __init__(self, path: str | Path):
-        self.path = str(path)
-        if self.path != ":memory:":
+        requested_path = str(path)
+        self._uri = requested_path == ":memory:"
+        self.path = f"file:workflow_engine_{uuid.uuid4().hex}?mode=memory&cache=shared" if self._uri else requested_path
+        self._anchor = sqlite3.connect(self.path, uri=True, isolation_level=None) if self._uri else None
+        if not self._uri:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
     @contextmanager
     def _connection(self):
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        db = sqlite3.connect(self.path, timeout=10, isolation_level=None, uri=self._uri)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=10000")
         db.execute("PRAGMA foreign_keys=ON")
