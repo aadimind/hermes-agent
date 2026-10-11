@@ -1,0 +1,9 @@
+name: workflow_engine
+version: 0.1.0
+description: "Deterministic workflow graph validation and execution-state primitives with explicit handler boundaries."
+author: aadimind
+kind: standalone
+platforms:
+  - linux
+  - macos
+  - windows
