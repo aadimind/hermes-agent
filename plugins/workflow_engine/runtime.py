@@ -146,6 +146,26 @@ class WorkflowRuntime:
             if self._execute_handler(run_id, node, inputs, existing, key):
                 return
 
+    @staticmethod
+    def _validate_approvals(
+        graph: dict[str, Any], approvals: dict[str, bool] | None
+    ) -> dict[str, bool]:
+        """Validate approval decisions against approval nodes in the graph."""
+        if approvals is None:
+            return {}
+        approval_nodes = {
+            node["id"] for node in graph["nodes"] if node["type"] == "approval"
+        }
+        if not isinstance(approvals, dict) or any(
+            key not in approval_nodes for key in approvals
+        ):
+            raise WorkflowStateError(
+                "approvals must only reference approval nodes in this workflow"
+            )
+        if any(type(value) is not bool for value in approvals.values()):
+            raise WorkflowStateError("approval values must be booleans")
+        return approvals
+
     def run(
         self,
         document: dict[str, Any],
@@ -156,18 +176,7 @@ class WorkflowRuntime:
         if not isinstance(run_id, str) or not run_id.strip():
             raise WorkflowStateError("run_id must be a non-empty string")
         graph = validate_workflow(document)
-        approval_nodes = {
-            node["id"] for node in graph["nodes"] if node["type"] == "approval"
-        }
-        if approvals is not None:
-            if not isinstance(approvals, dict) or any(
-                key not in approval_nodes for key in approvals
-            ):
-                raise WorkflowStateError(
-                    "approvals must only reference approval nodes in this workflow"
-                )
-            if any(type(value) is not bool for value in approvals.values()):
-                raise WorkflowStateError("approval values must be booleans")
+        validated_approvals = self._validate_approvals(graph, approvals)
 
         run = self.store.create_run(run_id, graph)
         if run["status"] == "succeeded":
@@ -177,7 +186,7 @@ class WorkflowRuntime:
                 f"run is {run['status']}; explicit recovery is required"
             )
 
-        self._execute_nodes(graph, run_id, approvals or {})
+        self._execute_nodes(graph, run_id, validated_approvals)
         current = self._get_run_or_raise(run_id)
         if current["status"] in {"paused", "failed"}:
             return current

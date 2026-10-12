@@ -179,3 +179,12 @@ def test_blank_run_id_is_rejected(tmp_path):
     runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"), {"transform": lambda config, inputs, key: {}})
     with pytest.raises(WorkflowStateError, match="run_id must be a non-empty string"):
         runtime.run(graph(), "  ")
+
+
+@pytest.mark.parametrize("approvals", [[], "invalid", 42])
+def test_non_mapping_approval_input_is_rejected(approvals, tmp_path):
+    runtime = WorkflowRuntime(WorkflowStore(tmp_path / "workflow.sqlite"), {
+        "transform": lambda config, inputs, key: {"ok": True}
+    })
+    with pytest.raises(WorkflowStateError, match="approvals must only reference approval nodes"):
+        runtime.run(graph(), "run-invalid-approval-container", approvals=approvals)
