@@ -1,5 +1,7 @@
 name: CI
 
+# CI retrigger commit: validate the workflow-engine health-gate branch on push.
+
 # Orchestrator workflow. Runs ``detect-changes`` once, then conditionally
 # calls the sub-workflows that a PR can actually affect. A final
 # ``all-checks-pass`` gate job aggregates results so branch protection only
